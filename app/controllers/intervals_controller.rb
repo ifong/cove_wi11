@@ -1,27 +1,32 @@
 class IntervalsController < ApplicationController
     before_filter :authenticate_user!
     before_filter :require_nda
+    before_filter :find_interval, :only => [:show, :update, :edit]
     
 	def index
-		@angles = Interval.unique_angles
-		@days = Interval.unique_days
-
-
-    date_filter = (params[:date].nil? || params[:date] == "") ? false : params[:date]
-    conditions = []
-    unless(params[:camera_angle].nil? || params[:camera_angle] == "")
-      conditions = ["camera_angle = ?", params[:camera_angle]]
-    end
-    @intervals = Interval.find(:all, :conditions => conditions, :order => "start_time").reject{|row| date_filter && date_filter != row.day} & Interval.lame_search(params[:search])
-
+    @filters = Interval.filters
+    @intervals = Interval.search(params)
     render 'index'
   end
 
   def show
-    @interval = Interval.find(params[:id])
-    @tags = Tag.all
+    @applied_tags= @interval.taggings
 
-    render "show"
+    #@unapplied_phenomenon = Code.phenomenon.unapplied(@interval.id)
+    @applied_phenomenon = @interval.codings.phenomenon
+    @all_phenomenon = Code.phenomenon.all
+
+    @applied_people = @interval.codings.people
+    @all_people = Code.people.all
+    #@unapplied_people = Code.people.unapplied(@interval.id)
+
+    respond_to do |format|
+      format.sprite { send_sprite }
+      format.jpg { send_thumbnail }
+      format.html {  render "show"}
+      format.m4v { send_video}
+    end
+
   end
 
   def new
@@ -30,7 +35,6 @@ class IntervalsController < ApplicationController
   end
 
   def edit
-    @interval = Interval.find(params[:id])
     render "edit"
   end
 
@@ -45,7 +49,6 @@ class IntervalsController < ApplicationController
   end
 
   def update
-    @interval = Interval.find(params[:id])
     @interval.attributes = {'tag_ids' => []}.merge(params[:interval] || {})
     
     if @interval.update_attributes(params[:interval])
@@ -55,11 +58,28 @@ class IntervalsController < ApplicationController
     end
   end
 
-  # DELETE /intervals/1
-  # DELETE /intervals/1.xml
   def destroy
     @interval = Interval.find(params[:id])
     @interval.destroy
     redirect_to(intervals_url)
   end
+
+  private
+  def find_interval
+    @interval = Interval.find(params[:id])
+  end
+  
+  def send_thumbnail
+    send_file(@interval.thumbnail_file, :type => 'image/jpeg', :disposition => 'inline', :url_based_filename => true) 
+  end
+  
+  def send_sprite
+    
+    send_file(@interval.sprite_file, :type => 'image/jpeg', :disposition => 'inline', :url_based_filename => true)
+  end
+  
+  def send_video
+    send_file(@interval.video_file, :type => 'video/mp4', :disposition => 'inline', :url_based_filename => true) 
+  end
+  
 end
